@@ -4,6 +4,7 @@
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
 #include <DHT_U.h>
+#include <Preferences.h>
 
 //defino estados
 #define PANTALLA1 1
@@ -32,57 +33,33 @@ DHT_Unified dht(DHTPIN, DHTTYPE);
 #define SW2_PIN 35
 
 //variables globales
-float VU = 0; //valor umbral
-float VA = dht.readTemperature(); //temperatura actual
+float VU = 0.0; //valor umbral
 int estadoActual = PANTALLA1;
-
-//variables antirebote 
-bool ARBOT1 = HIGH;
-bool ARBOT2 = HIGH;
-unsigned long tiempoBotones = 0;
-unsigned long intervaloBotones = 200;
-
-//variables delay 5 segundos
-unsigned long TimeUltimoCambio = 0;
-const long intervalo5seg = 5000;
-
+unsigned long contando = 0;
+Preferences preferences;
 
 void setup() {
   Serial.begin(115200);
-  pinMode(LED, OUTPUT);
-  pinMode(SW1_PIN, INPUT_PULLUP);
-  pinMode(SW2_PIN, INPUT_PULLUP);
+  pinMode(SW1_PIN, INPUT);
+  pinMode(SW2_PIN, INPUT);
   dht.begin();
   sensor_t sensor;
   dht.temperature().getSensor(&sensor);
-  delayMS = sensor.min_delay / 1000;
-}
 
-bool delay5seg () {
-  unsigned long TiempoAtual = millis();
-  if (TiempoActual - TimeUltimoCambio >= intervalo5seg) {
-    TimeUltimoCambio = TiempoActual;
-    return true;
-  }
-  return false;
-}
-
-void antiRebote () {
-  unsigned long tiempoAhora = millis();
-  if (tiempoAhora - tiempoBotones >= intervaloBotones) {
-    ARBOT1 = digitalRead(SW1_PIN);
-    ARBOT2 = digitalRead(SW2_PIN);
-    tiempoBotones = tiempoAhora;
-  }
+  preferences.begin("valor-VU", false);
+  VU = preferences.getFloat("umbral", 0);
+  preferences.end();
 }
 
 
 void loop() {
+
+  float VA = dht.readTemperature(); //temperatura actual
   switch (estadoActual) {
     case PANTALLA1:
-      antiRebote();
       
-      if (ARBOT1 == LOW){
+      if (digitalRead(SW1_PIN) == LOW){
+        contando = millis();
         estadoActual = CONFIRM_PANTALLA1;
       }
       
@@ -100,79 +77,82 @@ void loop() {
       break;
 
     case CONFIRM_PANTALLA1:
-      antiRebote();
 
-      if (ARBOT == HIGH && delay5seg()) {
+      if ((millis() - contando) >= 5000 && digitalRead(SW1_PIN) == HIGH) {
+        contando = 0;
         estadoActual = PANTALLA2;
       }
-
-      if (ARBOT == HIGH < delay5seg()) {
+      else {
         estadoActual = PANTALLA1;
       }
       break;
     
     case PANTALLA2:
-      antiRebote();
 
-      if (ARBOT2 == LOW) {
+      if (digitalRead(SW2_PIN) == LOW) {
         estadoActual = CONFIRM_PANTALLA2;
       }
 
-      if (ARBOT1 == LOW) {
+      if (digitalRead(SW1_PIN) == LOW) {
         estadoActual = SUMA;
       }
 
       display.clearDisplay();
       display.setTextSize(2);
       display.setTextColor(SSD1306_WHITE);
-      display.setCursor(0, 10);
+      display.setCursor(0, 10); 
       display.print("VALOR UMBRAL: ");
       display.print(VU);
-      display.print(" C");
       display.display();
       break;
     
     case CONFIRM_PANTALLA2:
-      antiRebote();
 
-      if (ARBOT2 == HIGH < delay5seg()) {
-        estadoActual = RESTA;  
+      if ((millis() - contando >= 5000) && digitalRead(SW2_PIN) == HIGH) {
+        contando = 0;
+        preferences.begin("valor-VU", false);
+        preferences.putFloat("umbral", VU);
+        preferences.end();
+        Serial.print("nuevo umbral: ");
+        Serial.println(VU);
+        }
+        estadoActual = PANTALLA1;  
       }
 
-      if (ARBOT2 == HIGH && delay5seg()) {
-        estadoActual = PANTALLA1;
+      if ((millis() - contando) <= 5000) && digitalRead(SW2_PIN) == HIGH) {
+        estadoActual = RESTA;
       }
       break;
 
     case SUMA:
-      antiRebote();
 
-      if (ARBOT1 == HIGH) {
+      if (digitalRead(SW1_PIN) == HIGH) {
         VU += 1;
         estadoActual = PANTALLA2;
       }
+
+      display.clearDisplay();
+      display.setTextSize(2);
+      display.setTextColor(SSD1306_WHITE);
+      display.setCursor(0, 10); 
+      display.print("VALOR UMBRAL: ");
+      display.print(VU);
+      display.display();
       break;
 
     case RESTA:
-      antiRebote();
 
-      if (ARBOT2 == HIGH) {
+      if (digitalRead(SW2_PIN) == HIGH) {
         VU -= 1;
         estadoActual = PANTALLA2;
       }
+
+      display.clearDisplay();
+      display.setTextSize(2);
+      display.setTextColor(SSD1306_WHITE);
+      display.setCursor(0, 10); 
+      display.print("VALOR UMBRAL: ");
+      display.print(VU);
+      display.display();
       break;
-
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
